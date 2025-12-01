@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+  <meta charset="utf-8" />
+  <title>מפת Mapillary - נקודות ותמרורים</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #050816;
+      color: #f5f5f5;
+      overflow: hidden;
+      direction: rtl;
+    }
+
+    #app {
+      display: grid;
+      grid-template-columns: minmax(0, 3fr) minmax(260px, 1fr);
+      grid-template-rows: auto 1fr;
+      grid-template-areas:
+        "header header"
+        "map side";
+      height: 100%;
+      gap: 8px;
+      padding: 8px;
+      box-sizing: border-box;
+    }
+
+    header {
+      grid-area: header;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: radial-gradient(circle at top left, #1f2937, #020617);
+      box-shadow:
+        0 0 0 1px rgba(148, 163, 184, 0.2),
+        0 18px 40px rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(16px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    header::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background:
+        radial-gradient(circle at 10% 0%, rgba(56, 189, 248, 0.18), transparent 60%),
+        radial-gradient(circle at 90% 100%, rgba(248, 113, 113, 0.18), transparent 55%);
+      opacity: 0.9;
+      pointer-events: none;
+    }
+
+    header > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .title-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-container {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-container img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .title-group h1 {
+      margin: 0;
+      font-size: clamp(1.1rem, 1vw + 0.8rem, 1.5rem);
+      letter-spacing: 0.04em;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .title-pill {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      text-transform: uppercase;
+    }
+
+    .subtitle {
+      font-size: 0.75rem;
+      opacity: 0.8;
+      margin-top: 3px;
+    }
+
+    .legend-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-width: 300px;
+    }
+
+    .legend-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      opacity: 0.9;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      font-size: 0.75rem;
+      padding: 6px 10px;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      max-height: 80px;
+      overflow-y: auto;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      gap: 5px;
+      align-items: center;
+      white-space: nowrap;
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+    }
+
+    .legend-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .glow-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: #22c55e;
+      position: relative;
+      box-shadow:
+        0 0 0 0 rgba(34, 197, 94, 0.5),
+        0 0 0 0 rgba(34, 197, 94, 0.3);
+      animation: ping 2s infinite;
+    }
+
+    @keyframes ping {
+      0% {
+        box-shadow:
+          0 0 0 0 rgba(34, 197, 94, 0.5),
+          0 0 0 0 rgba(34, 197, 94, 0.3);
+      }
+      70% {
+        box-shadow:
+          0 0 0 12px rgba(34, 197, 94, 0),
+          0 0 0 30px rgba(34, 197, 94, 0);
+      }
+      100% {
+        box-shadow:
+          0 0 0 0 rgba(34, 197, 94, 0),
+          0 0 0 0 rgba(34, 197, 94, 0);
+      }
+    }
+
+    #map {
+      grid-area: map;
+      width: 100%;
+      height: 100%;
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(148, 163, 184, 0.35),
+        0 16px 45px rgba(15, 23, 42, 0.95);
+      transform-origin: center;
+      animation: float-in-map 850ms cubic-bezier(0.17, 0.89, 0.32, 1.27);
+    }
+
+    @keyframes float-in-map {
+      0% {
+        opacity: 0;
+        transform: translateY(14px) scale(0.97);
+        filter: blur(4px);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+      }
+    }
+
+    #side-panel {
+      grid-area: side;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px;
+      border-radius: 18px;
+      background: radial-gradient(circle at top, #020617, #020617 30%, #020617);
+      box-shadow:
+        0 0 0 1px rgba(148, 163, 184, 0.35),
+        0 14px 40px rgba(15, 23, 42, 0.9);
+      position: relative;
+      overflow: hidden;
+    }
+
+    #side-panel::before {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(59, 130, 246, 0.22), transparent 55%),
+        radial-gradient(circle at 130% 0%, rgba(244, 63, 94, 0.16), transparent 55%);
+      opacity: 0.9;
+      mix-blend-mode: screen;
+      pointer-events: none;
+    }
+
+    #side-panel > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .panel-section-title {
+      font-size: 0.8rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      opacity: 0.8;
+    }
+
+    .totals {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 6px;
+      font-size: 0.8rem;
+    }
+
+    .totals-card {
+      padding: 7px 8px;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .totals-card span.label {
+      opacity: 0.8;
+    }
+
+    .totals-card span.value {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .sparkline {
+      height: 5px;
+      border-radius: 999px;
+      margin-top: 3px;
+      background: linear-gradient(90deg, rgba(148, 163, 184, 0.1), rgba(148, 163, 184, 0.6));
+      overflow: hidden;
+      position: relative;
+    }
+
+    .sparkline-fill {
+      position: absolute;
+      inset: 0;
+      transform-origin: right center;
+      transform: scaleX(0);
+      animation: fill 1.2s ease forwards;
+    }
+
+    @keyframes fill {
+      from { transform: scaleX(0); }
+      to { transform: scaleX(1); }
+    }
+
+    .object-info {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(148, 163, 184, 0.35);
+      font-size: 0.78rem;
+    }
+
+    .object-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .object-title span.name {
+      font-weight: 600;
+      font-size: 0.82rem;
+    }
+
+    .badge {
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      font-size: 0.7rem;
+      background: rgba(15, 23, 42, 0.9);
+    }
+
+    .property-row {
+      display: grid;
+      grid-template-columns: 1fr 1.5fr;
+      gap: 4px;
+      align-items: center;
+      margin-bottom: 4px;
+      font-size: 0.75rem;
+    }
+
+    .property-label {
+      opacity: 0.8;
+      text-align: left;
+    }
+
+    .property-value {
+      text-align: right;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.7rem;
+      overflow-wrap: break-word;
+    }
+
+    .hint {
+      margin-top: auto;
+      font-size: 0.7rem;
+      opacity: 0.7;
+      padding-top: 6px;
+      border-top: 1px dashed rgba(148, 163, 184, 0.4);
+    }
+
+    .hint kbd {
+      border-radius: 4px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      padding: 1px 6px;
+      font-size: 0.68rem;
+      background: rgba(15, 23, 42, 0.9);
+    }
+
+    .leaflet-container {
+      background: radial-gradient(circle at top, #0b1120, #020617);
+    }
+
+    .leaflet-control-attribution {
+      font-size: 0.65rem;
+      background: rgba(15, 23, 42, 0.8) !important;
+      color: #e5e7eb !important;
+      border-radius: 10px;
+      padding: 2px 6px;
+    }
+
+    .leaflet-popup-content-wrapper {
+      background: rgba(15, 23, 42, 0.96);
+      color: #f9fafb;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      box-shadow: 0 12px 25px rgba(15, 23, 42, 0.9);
+    }
+
+    .leaflet-popup-tip {
+      background: rgba(15, 23, 42, 0.96);
+      border-top-color: rgba(148, 163, 184, 0.5);
+    }
+
+    .popup-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+      font-size: 0.9rem;
+    }
+
+    .popup-property-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      margin-bottom: 2px;
+    }
+
+    .pulse-highlight {
+      animation: pulse-outline 1.2s ease-out 2;
+    }
+
+    @keyframes pulse-outline {
+      0% {
+        stroke-width: 2;
+        stroke-opacity: 1;
+        filter: drop-shadow(0 0 0 rgba(248, 113, 113, 0));
+      }
+      50% {
+        stroke-width: 5;
+        stroke-opacity: 1;
+        filter: drop-shadow(0 0 16px rgba(248, 113, 113, 0.85));
+      }
+      100% {
+        stroke-width: 2;
+        stroke-opacity: 1;
+        filter: drop-shadow(0 0 0 rgba(248, 113, 113, 0));
+      }
+    }
+
+    .upload-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+    }
+
+    .upload-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      background: rgba(15, 23, 42, 0.9);
+      cursor: pointer;
+    }
+
+    .upload-label span.icon {
+      font-size: 0.9rem;
+    }
+
+    #geojson-file-name {
+      max-width: 180px;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      opacity: 0.8;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    .layer-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      font-size: 0.8rem;
+    }
+
+    .layer-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      background: rgba(15, 23, 42, 0.9);
+      cursor: pointer;
+    }
+
+    .layer-toggle.active {
+      background: rgba(30, 64, 175, 0.9);
+      border-color: rgba(59, 130, 246, 0.8);
+    }
+
+    @media (max-width: 900px) {
+      #app {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto minmax(0, 2fr) minmax(0, 1fr);
+        grid-template-areas:
+          "header"
+          "map"
+          "side";
+      }
+      #side-panel {
+        min-height: 210px;
+      }
+      header {
+        flex-direction: column;
+        gap: 10px;
+        align-items: stretch;
+      }
+      .title-group {
+        justify-content: center;
+      }
+      .legend-container {
+        max-width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="title-group">
+        <div class="logo-container">
+          <img src="https://glz.co.il/media/16612/%D7%99%D7%94%D7%99%D7%94-%D7%91%D7%A1%D7%93%D7%A8-%D7%A8%D7%90%D7%A9-%D7%94%D7%A2%D7%99%D7%9F.jpg" alt="לוגו" />
+        </div>
+        <div>
+          <h1>
+            <span class="glow-dot"></span>
+            <span>מפת Mapillary</span>
+            <span class="title-pill">נקודות ותמרורים</span>
+          </h1>
+          <div class="subtitle">לחיצה על נקודה מציגה את פרטי האובייקט ומדגישה אותו באנימציה.</div>
+        </div>
+      </div>
+
+      <div class="legend-container">
+        <div class="legend-title">מקרא שכבות</div>
+        <div class="legend" id="legend"></div>
+      </div>
+
+      <div class="layer-controls">
+        <div class="layer-toggle active" data-layer="points">
+          <span>🔵</span>
+          <span>נקודות</span>
+        </div>
+        <div class="layer-toggle active" data-layer="signs">
+          <span>🟡</span>
+          <span>תמרורים</span>
+        </div>
+      </div>
+
+      <!-- UPLOAD GEOJSON -->
+      <div class="upload-wrapper">
+        <label class="upload-label" for="geojson-input">
+          <span class="icon">📁</span>
+          <span>העלה קובץ GeoJSON</span>
+        </label>
+        <span id="geojson-file-name">לא נטען קובץ</span>
+        <input
+          id="geojson-input"
+          type="file"
+          accept=".geojson,application/geo+json,application/json"
+        />
+      </div>
+    </header>
+
+    <div id="map"></div>
+
+    <aside id="side-panel">
+      <div>
+        <div class="panel-section-title">סיכום כללי</div>
+        <div class="totals">
+          <div class="totals-card">
+            <span class="label">סה"כ נקודות</span>
+            <span class="value" id="total-points">0</span>
+            <div class="sparkline">
+              <div class="sparkline-fill" id="spark-points" style="background: linear-gradient(90deg, #1d4ed8, #3b82f6);"></div>
+            </div>
+          </div>
+          <div class="totals-card">
+            <span class="label">סוגי אובייקטים</span>
+            <span class="value" id="total-types">0</span>
+            <div class="sparkline">
+              <div class="sparkline-fill" id="spark-types" style="background: linear-gradient(90deg, #7c3aed, #8b5cf6);"></div>
+            </div>
+          </div>
+          <div class="totals-card">
+            <span class="label">טווח תאריכים</span>
+            <span class="value" id="date-range">—</span>
+            <div class="sparkline">
+              <div class="sparkline-fill" id="spark-dates" style="background: linear-gradient(90deg, #059669, #10b981);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="object-info">
+        <div class="object-title">
+          <span class="name" id="object-name">לא נבחר אובייקט</span>
+          <span class="badge" id="object-id-badge">לחץ על נקודה במפה</span>
+        </div>
+        <div id="object-properties"></div>
+      </div>
+
+      <div class="hint">
+        💡 טיפ: העלה קובץ <kbd>.geojson</kbd> של Mapillary למעלה.
+        <br />
+        ניתן להעלות קבצים של נקודות או תמרורים. המערכת תזהה את סוגי האובייקטים אוטומטית.
+      </div>
+    </aside>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <script>
+    // ----- MAP -----
+    const map = L.map("map", {
+      zoomControl: true,
+      minZoom: 10,
+      maxZoom: 20
+    });
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+
+    map.setView([32.094, 34.94], 16); // מרכז לפי דוגמת הנתונים
+
+    let pointsLayer = null;
+    let signsLayer = null;
+    let highlightedLayer = null;
+    let allFeatures = [];
+
+    // קבוצות צבעים לסוגי אובייקטים שונים
+    const COLOR_SCHEMES = {
+      marking: ["#3b82f6", "#60a5fa", "#93c5fd"], // כחול לסימונים
+      object: ["#10b981", "#34d399", "#6ee7b7"],   // ירוק לאובייקטים
+      traffic: ["#f59e0b", "#fbbf24", "#fcd34d"],  // כתום לתמרורים
+      support: ["#8b5cf6", "#a78bfa", "#c4b5fd"],  // סגול לתומכים
+      default: ["#ef4444", "#f87171", "#fca5a5"]   // אדום לברירת מחדל
+    };
+
+    // מיפוי קטגוריות לפי תחילת ה-value
+    function getCategoryFromValue(value) {
+      if (!value) return "default";
+      if (value.startsWith("marking--")) return "marking";
+      if (value.startsWith("object--")) return "object";
+      if (value.startsWith("traffic--")) return "traffic";
+      if (value.startsWith("support--")) return "support";
+      return "default";
+    }
+
+    function getColorForValue(value, index = 0) {
+      const category = getCategoryFromValue(value);
+      const scheme = COLOR_SCHEMES[category] || COLOR_SCHEMES.default;
+      return scheme[index % scheme.length];
+    }
+
+    function formatDate(timestamp) {
+      if (!timestamp) return "—";
+      try {
+        const date = new Date(timestamp);
+        return date.toLocaleDateString('he-IL');
+      } catch {
+        return "—";
+      }
+    }
+
+    function formatDateTime(timestamp) {
+      if (!timestamp) return "—";
+      try {
+        const date = new Date(timestamp);
+        return date.toLocaleString('he-IL');
+      } catch {
+        return "—";
+      }
+    }
+
+    function animateNumber(element, target, duration = 800) {
+      const start = 0;
+      const startTime = performance.now();
+      function frame(now) {
+        const progress = Math.min((now - startTime) / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const value = Math.round(start + (target - start) * eased);
+        element.textContent = value.toLocaleString("he-IL");
+        if (progress < 1) requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    }
+
+    function updateTotalsPanel(features) {
+      const totalPoints = features.length;
+      
+      // ספירת סוגי אובייקטים ייחודיים
+      const uniqueTypes = new Set();
+      features.forEach(f => {
+        if (f.properties && f.properties.value) {
+          uniqueTypes.add(f.properties.value);
+        }
+      });
+      
+      // מציאת טווח תאריכים
+      let minDate = Infinity;
+      let maxDate = -Infinity;
+      features.forEach(f => {
+        if (f.properties) {
+          const firstSeen = f.properties.first_seen_at;
+          const lastSeen = f.properties.last_seen_at;
+          if (firstSeen && firstSeen < minDate) minDate = firstSeen;
+          if (lastSeen && lastSeen > maxDate) maxDate = lastSeen;
+          if (firstSeen && firstSeen > maxDate) maxDate = firstSeen;
+        }
+      });
+
+      const totalPointsEl = document.getElementById("total-points");
+      const totalTypesEl = document.getElementById("total-types");
+      const dateRangeEl = document.getElementById("date-range");
+
+      animateNumber(totalPointsEl, totalPoints);
+      animateNumber(totalTypesEl, uniqueTypes.size);
+
+      if (minDate !== Infinity && maxDate !== -Infinity) {
+        dateRangeEl.textContent = `${formatDate(minDate)} - ${formatDate(maxDate)}`;
+      } else {
+        dateRangeEl.textContent = "—";
+      }
+
+      // עדכון ספארקליינים
+      const sparkPoints = document.getElementById("spark-points");
+      const sparkTypes = document.getElementById("spark-types");
+      const sparkDates = document.getElementById("spark-dates");
+
+      sparkPoints.style.transform = `scaleX(${Math.min(1, totalPoints / 100)})`;
+      sparkTypes.style.transform = `scaleX(${Math.min(1, uniqueTypes.size / 20)})`;
+      sparkDates.style.transform = `scaleX(${minDate !== Infinity ? 1 : 0})`;
+    }
+
+    function updateLegend(features) {
+      const legendEl = document.getElementById("legend");
+      if (!features || features.length === 0) {
+        legendEl.innerHTML = '<div class="legend-item">אין נתונים להצגה</div>';
+        return;
+      }
+
+      // איסוף כל סוגי האובייקטים
+      const typeCounts = {};
+      features.forEach(f => {
+        if (f.properties && f.properties.value) {
+          const type = f.properties.value;
+          typeCounts[type] = (typeCounts[type] || 0) + 1;
+        }
+      });
+
+      // מיון לפי שכיחות
+      const sortedTypes = Object.entries(typeCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 15); // הגבלה ל-15 הסוגים הנפוצים ביותר
+
+      const legendItems = sortedTypes.map(([type, count], index) => {
+        const color = getColorForValue(type, index);
+        const displayName = type.replace(/--/g, ' › ').replace(/_/g, ' ');
+        
+        return `
+          <div class="legend-item">
+            <span class="legend-swatch" style="background: ${color}"></span>
+            <span>${displayName}</span>
+            <span style="opacity: 0.7; font-size: 0.7rem;">(${count})</span>
+          </div>
+        `;
+      });
+
+      legendEl.innerHTML = legendItems.join('');
+    }
+
+    function setObjectInfo(feature) {
+      const titleEl = document.getElementById("object-name");
+      const badgeEl = document.getElementById("object-id-badge");
+      const propertiesEl = document.getElementById("object-properties");
+
+      if (!feature) {
+        titleEl.textContent = "לא נבחר אובייקט";
+        badgeEl.textContent = "לחץ על נקודה במפה";
+        propertiesEl.innerHTML = "";
+        return;
+      }
+
+      const props = feature.properties || {};
+      const id = props.id || feature.id || "ללא מזהה";
+      const value = props.value || "ללא סוג";
+      const displayName = value.replace(/--/g, ' › ').replace(/_/g, ' ');
+
+      titleEl.textContent = displayName;
+      badgeEl.textContent = `ID: ${id}`;
+
+      const properties = [
+        { label: "סוג", value: value },
+        { label: "תאריך ראשון", value: formatDateTime(props.first_seen_at) },
+        { label: "תאריך אחרון", value: formatDateTime(props.last_seen_at) },
+        { label: "מזהה", value: id },
+        { label: "קואורדינטות", value: feature.geometry ? JSON.stringify(feature.geometry.coordinates) : "—" }
+      ];
+
+      const propertiesHtml = properties.map(prop => `
+        <div class="property-row">
+          <span class="property-label">${prop.label}:</span>
+          <span class="property-value">${prop.value}</span>
+        </div>
+      `).join('');
+
+      propertiesEl.innerHTML = propertiesHtml;
+    }
+
+    function highlightLayer(layer) {
+      if (!layer) return;
+      if (highlightedLayer) {
+        highlightedLayer.setStyle({ radius: 8, weight: 2 });
+      }
+      highlightedLayer = layer;
+      layer.setStyle({ radius: 12, weight: 3 });
+    }
+
+    function pointToLayer(feature, latlng) {
+      const props = feature.properties || {};
+      const value = props.value || "";
+      const category = getCategoryFromValue(value);
+      const color = getColorForValue(value);
+      
+      return L.circleMarker(latlng, {
+        radius: 8,
+        fillColor: color,
+        color: "#ffffff",
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.8
+      });
+    }
+
+    function onEachFeature(feature, layer) {
+      layer.on("click", () => {
+        setObjectInfo(feature);
+        highlightLayer(layer);
+
+        const props = feature.properties || {};
+        const value = props.value || "ללא סוג";
+        const displayName = value.replace(/--/g, ' › ').replace(/_/g, ' ');
+        
+        let html = `<div class="popup-title">${displayName}</div>`;
+        
+        if (props.id) {
+          html += `<div class="popup-property-row"><span>מזהה:</span><span>${props.id}</span></div>`;
+        }
+        if (props.first_seen_at) {
+          html += `<div class="popup-property-row"><span>תאריך ראשון:</span><span>${formatDateTime(props.first_seen_at)}</span></div>`;
+        }
+        if (props.last_seen_at) {
+          html += `<div class="popup-property-row"><span>תאריך אחרון:</span><span>${formatDateTime(props.last_seen_at)}</span></div>`;
+        }
+        if (props.value) {
+          html += `<div class="popup-property-row"><span>סוג:</span><span>${value}</span></div>`;
+        }
+
+        layer.bindPopup(html).openPopup();
+      });
+
+      layer.on("mouseover", () => {
+        layer.setStyle({ radius: 10, weight: 3 });
+      });
+
+      layer.on("mouseout", () => {
+        if (layer !== highlightedLayer) {
+          layer.setStyle({ radius: 8, weight: 2 });
+        }
+      });
+    }
+
+    function initMapillaryLayer(geojsonData) {
+      if (!geojsonData || !geojsonData.features) {
+        alert("קובץ GeoJSON לא תקין");
+        console.error("GeoJSON data is missing or invalid");
+        return;
+      }
+
+      allFeatures = geojsonData.features;
+
+      // נקה שכבות קיימות
+      if (pointsLayer) {
+        map.removeLayer(pointsLayer);
+      }
+      if (signsLayer) {
+        map.removeLayer(signsLayer);
+      }
+
+      // הפרדה בין נקודות רגילות לתמרורים
+      const pointsFeatures = [];
+      const signsFeatures = [];
+
+      allFeatures.forEach(feature => {
+        const value = feature.properties?.value || "";
+        if (value.includes("traffic") || value.includes("sign")) {
+          signsFeatures.push(feature);
+        } else {
+          pointsFeatures.push(feature);
+        }
+      });
+
+      // יצירת שכבות
+      pointsLayer = L.geoJSON(pointsFeatures, {
+        pointToLayer: pointToLayer,
+        onEachFeature: onEachFeature
+      });
+
+      signsLayer = L.geoJSON(signsFeatures, {
+        pointToLayer: (feature, latlng) => {
+          return L.circleMarker(latlng, {
+            radius: 10,
+            fillColor: "#f59e0b",
+            color: "#ffffff",
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.9
+          });
+        },
+        onEachFeature: onEachFeature
+      });
+
+      // הוספת שכבות למפה
+      pointsLayer.addTo(map);
+      signsLayer.addTo(map);
+
+      // התאמת תצוגה לנתונים
+      if (allFeatures.length > 0) {
+        const bounds = L.geoJSON(allFeatures).getBounds();
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [20, 20] });
+        }
+      }
+
+      // עדכון פאנלים
+      updateTotalsPanel(allFeatures);
+      updateLegend(allFeatures);
+
+      // בחירת הנקודה הראשונה להדגמה
+      if (allFeatures.length > 0) {
+        const firstFeature = allFeatures[0];
+        setObjectInfo(firstFeature);
+        
+        // מציאת השכבה המתאימה
+        const firstLayer = pointsLayer.getLayers()[0] || signsLayer.getLayers()[0];
+        if (firstLayer) {
+          setTimeout(() => highlightLayer(firstLayer), 600);
+        }
+      }
+    }
+
+    // ----- LAYER CONTROLS -----
+    document.querySelectorAll('.layer-toggle').forEach(toggle => {
+      toggle.addEventListener('click', () => {
+        const layerType = toggle.dataset.layer;
+        toggle.classList.toggle('active');
+        
+        if (layerType === 'points' && pointsLayer) {
+          if (toggle.classList.contains('active')) {
+            map.addLayer(pointsLayer);
+          } else {
+            map.removeLayer(pointsLayer);
+          }
+        } else if (layerType === 'signs' && signsLayer) {
+          if (toggle.classList.contains('active')) {
+            map.addLayer(signsLayer);
+          } else {
+            map.removeLayer(signsLayer);
+          }
+        }
+      });
+    });
+
+    // ----- FILE UPLOAD HANDLER -----
+    const fileInput = document.getElementById("geojson-input");
+    const fileNameSpan = document.getElementById("geojson-file-name");
+
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      fileNameSpan.textContent = file.name;
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const json = JSON.parse(ev.target.result);
+          initMapillaryLayer(json);
+        } catch (err) {
+          console.error(err);
+          alert("לא ניתן לקרוא את הקובץ. ודא שזה JSON / GeoJSON תקין.");
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    // יצירת דוגמת נתונים להדגמה
+    function createSampleData() {
+      const sampleData = {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [34.9389374256134, 32.09400043496244]
+            },
+            "properties": {
+              "first_seen_at": 1731930019500,
+              "id": 1108064627656426,
+              "last_seen_at": 1731930019500,
+              "value": "marking--discrete--arrow--straight"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [34.93896424770355, 32.09401861341895]
+            },
+            "properties": {
+              "first_seen_at": 1731930019500,
+              "id": 1108064617656427,
+              "last_seen_at": 1731930019500,
+              "value": "marking--discrete--arrow--straight"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [34.93899643421173, 32.09404588109696]
+            },
+            "properties": {
+              "first_seen_at": 1731930019500,
+              "id": 1108064734323082,
+              "last_seen_at": 1731930019500,
+              "value": "marking--discrete--arrow--left"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [34.94195222854614, 32.094050425709156]
+            },
+            "properties": {
+              "first_seen_at": 1645091270822,
+              "id": 122077830370648,
+              "last_seen_at": 1645091270822,
+              "value": "object--support--utility-pole"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "Point",
+              "coordinates": [34.94180202484131, 32.09406405954441]
+            },
+            "properties": {
+              "first_seen_at": 1645091270822,
+              "id": 122077830370649,
+              "last_seen_at": 1645091270822,
+              "value": "traffic--sign--stop"
+            }
+          }
+        ]
+      };
+      
+      // טעינת דוגמת הנתונים אוטומטית
+      setTimeout(() => {
+        initMapillaryLayer(sampleData);
+        fileNameSpan.textContent = "דוגמת נתונים (Mapillary)";
+      }, 1000);
+    }
+
+    // התחלת דוגמת הנתונים
+    createSampleData();
+  </script>
+</body>
+</html>
